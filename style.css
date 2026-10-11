@@ -137,3 +137,13 @@ footer p,footer>span{font-size:11px;margin:0}
   display: block;
   background: transparent;
 }
+.nance-orb-logo {
+  width: 68%;
+  height: 68%;
+  object-fit: contain;
+  display: block;
+  background: transparent;
+  position: relative;
+  z-index: 2;
+  filter: drop-shadow(0 0 12px rgba(168, 85, 247, 0.45));
+}
