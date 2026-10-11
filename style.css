@@ -1,3 +1,4 @@
+
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
 
 :root {
@@ -111,3 +112,21 @@ footer p,footer>span{font-size:11px;margin:0}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 @media(max-width:850px){nav{display:none}.hero{grid-template-columns:1fr;padding-top:65px}.hero-art{height:310px}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.section{padding:70px 5%}.role-strip{margin:0 5%;flex-direction:column}.section-heading{align-items:start;flex-direction:column}}
 @media(max-width:560px){.navbar{padding:0 4%;height:68px}.nav-actions{gap:4px}.nav-actions .btn{padding:9px 10px;font-size:11px}.logo{font-size:19px}.hero{padding:60px 5% 40px}.hero-art{transform:scale(.88);margin:-10px -20px}.cards,.steps{grid-template-columns:1fr}.toolbar{flex-direction:column}.toolbar input,.toolbar select{max-width:none}.project-card{align-items:start;flex-direction:column}.project-meta{text-align:left}.section-heading>p{margin-bottom:0}footer{flex-wrap:wrap}.dialog{padding:24px 20px}.role-switcher{align-items:stretch;flex-direction:column}}
+
+/* NANCE admin verification dashboard */
+.admin-panel { border-color: #7650a1; background: linear-gradient(145deg, #191027, #0e0916); }
+.admin-heading-row, .admin-request-top { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; }
+.admin-heading-row { margin-bottom:12px; }
+.admin-heading-row h3 { margin:7px 0 0; }
+.admin-request { margin:14px 0; padding:17px; border:1px solid var(--line); border-radius:14px; background:#130d1e; overflow-wrap:anywhere; }
+.admin-request h4 { margin:8px 0 0; text-transform:capitalize; font-size:15px; }
+.admin-request p { margin:10px 0; font-size:12px; }
+.admin-request strong { color:var(--text); }
+.admin-request a { color:var(--violet2); text-decoration:underline; text-underline-offset:3px; overflow-wrap:anywhere; }
+.admin-request ul { margin:0; padding-left:20px; font-size:12px; overflow-wrap:anywhere; }
+.admin-request li { margin:5px 0; }
+.admin-request code { font-size:11px; color:#e4d2ff; overflow-wrap:anywhere; }
+.admin-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; padding-top:13px; border-top:1px solid var(--line); }
+.admin-actions .btn { padding:9px 12px; }
+.admin-reject { color:var(--danger); }
+@media(max-width:560px) { .admin-heading-row,.admin-request-top { flex-direction:column; align-items:stretch; } .admin-actions .btn { flex:1 1 120px; } }
