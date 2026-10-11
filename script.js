@@ -101,24 +101,62 @@ function renderTalent() {
     </article>`).join("") : `<p>No sample profiles match your search.</p>`;
 }
 
-function renderProjects() {
+
+async function renderProjects() {
   const query = ($("#projectSearch").value || "").toLowerCase().trim();
   const category = $("#projectType").value;
-  const filtered = sampleProjects.filter(project =>
-    (category === "all" || project.category === category) &&
-    `${project.title} ${project.description}`.toLowerCase().includes(query)
-  );
 
-  $("#projectGrid").innerHTML = filtered.length ? filtered.map(project => `
-    <article class="project-card">
-      <div>
-        <span class="tag">${safeText(project.category === "editing" ? "Video editing" : project.category === "creator" ? "Creator campaign" : project.category)}</span>
-        <h3>${safeText(project.title)}</h3>
-        <p>${safeText(project.description)}</p>
-        <p class="small">${safeText(project.timeline)} · Illustrative sample listing</p>
-      </div>
-      <div class="project-meta"><strong>${money(project.budget)}</strong><button class="btn btn-outline" data-project="${safeText(project.id)}">View project</button></div>
-    </article>`).join("") : `<p>No sample projects match your search.</p>`;
+  const grid = $("#projectGrid");
+  grid.innerHTML = "<p>Loading projects...</p>";
+
+  try {
+    let request = db
+      .from("projects")
+      .select("*")
+      .eq("status", "open")
+      .order("created_at", { ascending: false });
+
+    if (category && category !== "all") {
+      request = request.eq("category", category);
+    }
+
+    const { data: projects, error } = await request;
+
+    if (error) throw error;
+
+    const filtered = (projects || []).filter((project) =>
+      `${project.title || ""} ${project.description || ""}`
+        .toLowerCase()
+        .includes(query)
+    );
+
+    grid.innerHTML = filtered.length
+      ? filtered.map((project) => `
+          <article class="project-card">
+            <div>
+              <span class="tag">${safeText(
+                project.category === "editing"
+                  ? "Video editing"
+                  : project.category === "creator"
+                    ? "Creator campaign"
+                    : project.category || "Project"
+              )}</span>
+              <h3>${safeText(project.title || "Untitled project")}</h3>
+              <p>${safeText(project.description || "")}</p>
+              <p class="small">${safeText(project.timeline || "Timeline flexible")}</p>
+            </div>
+            <div class="project-meta">
+              <strong>${money(project.budget || 0)}</strong>
+              <button class="btn btn-outline" data-project="${safeText(project.id)}">View project</button>
+            </div>
+          </article>
+        `).join("")
+      : "<p>No open projects found. Try another search.</p>";
+
+  } catch (error) {
+    console.error("Could not load projects:", error);
+    grid.innerHTML = "<p>Projects couldn't load. Please refresh and try again.</p>";
+  }
 }
 
 function showAuth(mode = "signup") {
