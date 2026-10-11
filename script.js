@@ -810,4 +810,3 @@ document.addEventListener("DOMContentLoaded", async () => {
   updateAuthMode();
   await restoreSession();
 });
-}
