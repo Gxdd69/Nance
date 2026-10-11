@@ -1,445 +1,614 @@
+"use strict";
 
-(() => {
-  "use strict";
+/*
+ NANCE authentication foundation.
+ Supabase publishable keys are intended for browser clients.
+ Never add a service-role key or database password here.
+*/
 
-  const $ = (selector, root = document) => root.querySelector(selector);
-  const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-  const escapeHTML = (value = "") => String(value).replace(/[&<>"']/g, char => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+const SUPABASE_URL = "https://mslqthzabgzxhbecboin.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_zV4dcgUxSntrNuznj24SzQ_VdY9uquj";
+
+const db = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_PUBLISHABLE_KEY
+);
+
+const $ = (selector) => document.querySelector(selector);
+const $$ = (selector) => [...document.querySelectorAll(selector)];
+
+const roleNames = {
+  client: "Client",
+  editor: "Video editor",
+  creator: "Creator / influencer",
+  brand: "Brand / agency"
+};
+
+const verificationRoles = ["editor", "creator", "brand"];
+let currentUser = null;
+let profile = null;
+let verificationRecords = [];
+let activeRole = "client";
+let signupMode = true;
+let toastTimer;
+
+const sampleTalent = [
+  {name:"Arjun Mehta",role:"editor",title:"Motion-led video editor",skills:"After Effects · Reels · Ads",rate:1500,bio:"High-energy edits, expressive typography and clean motion systems."},
+  {name:"Riya Shah",role:"creator",title:"Lifestyle creator",skills:"Lifestyle · Beauty · Short-form",rate:5000,bio:"Lifestyle storytelling and short-form content collaborations."},
+  {name:"Dev Patel",role:"editor",title:"YouTube & storytelling editor",skills:"YouTube · Storytelling · Colour",rate:2500,bio:"Long-form storytelling, pacing, sound design and colour."}
+];
+
+const sampleProjects = [
+  {id:"sample1",title:"Edit 8 short-form videos",category:"editing",description:"Turn existing footage into polished vertical reels with captions and clean pacing.",budget:12000,timeline:"10 days",sample:true},
+  {id:"sample2",title:"Creator campaign for a new collection",category:"creator",description:"A small lifestyle brand is looking for creators for a product launch.",budget:18000,timeline:"3 weeks",sample:true},
+  {id:"sample3",title:"Motion graphics for a fitness channel",category:"editing",description:"Animated text, simple diagrams and transitions for educational videos.",budget:8000,timeline:"1 week",sample:true}
+];
+
+function toast(message) {
+  const el = $("#toast");
+  el.textContent = message;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 3600);
+}
+
+function money(value) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency", currency: "INR", maximumFractionDigits: 0
+  }).format(Number(value) || 0);
+}
+
+function safeText(value) {
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
+    "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;"
   }[char]));
+}
 
-  const storage = {
-    get(key, fallback) {
-      try {
-        const value = localStorage.getItem("nance_" + key);
-        return value ? JSON.parse(value) : fallback;
-      } catch {
-        return fallback;
-      }
-    },
-    set(key, value) {
-      try {
-        localStorage.setItem("nance_" + key, JSON.stringify(value));
-      } catch {
-        toast("Browser storage is unavailable. Your change may not be saved.", true);
-      }
-    }
-  };
+function openDialog(id) {
+  const dialog = document.getElementById(id);
+  if (dialog && !dialog.open) dialog.showModal();
+}
 
-  const talent = [
-    { id:"e1", name:"Aarav Mehta", role:"editor", title:"Video Editor & Motion Designer", initials:"AM", specialty:["Motion Graphics","Brand Films"], bio:"Cinematic edits, clean typography and motion-led storytelling for brands and creators.", rate:2500, unit:"project", featured:true },
-    { id:"e2", name:"Riya Shah", role:"editor", title:"Short-Form Video Editor", initials:"RS", specialty:["Reels","Motion Graphics"], bio:"Fast-paced reels, sharp hooks, smooth transitions and engaging social-first edits.", rate:1200, unit:"reel", featured:true },
-    { id:"c1", name:"Mira Kapoor", role:"creator", title:"Lifestyle & Fashion Creator", initials:"MK", specialty:["Lifestyle"], bio:"Lifestyle storytelling, fashion content and relatable brand integrations.", rate:8000, unit:"campaign", featured:true },
-    { id:"e3", name:"Dev Patel", role:"editor", title:"YouTube & Documentary Editor", initials:"DP", specialty:["Brand Films"], bio:"Long-form storytelling, interviews, colour grading and polished final cuts.", rate:5000, unit:"video", featured:true },
-    { id:"c2", name:"Ananya Desai", role:"creator", title:"Fitness & Wellness Creator", initials:"AD", specialty:["Fitness"], bio:"Fitness routines, wellness education and authentic product-led content.", rate:6000, unit:"campaign", featured:true },
-    { id:"e4", name:"Kabir Joshi", role:"editor", title:"Reels & Social Media Editor", initials:"KJ", specialty:["Reels"], bio:"Social-first editing with subtitles, rhythm, punchy cuts and clear storytelling.", rate:1000, unit:"reel", featured:true }
-  ];
+function closeDialog(id) {
+  const dialog = document.getElementById(id);
+  if (dialog?.open) dialog.close();
+}
 
-  const initialProjects = [
-    { id:"p1", title:"30 Instagram Reels for a Fitness Brand", category:"editing", categoryLabel:"VIDEO EDITING", description:"Looking for an editor for short fitness reels with clean subtitles, punchy cuts and simple motion graphics.", budget:18000, timeline:"Monthly", owner:"FitLife Studio", ownerType:"Brand", skills:["Reels","Subtitles","Motion Graphics"], featured:true, createdAt:1 },
-    { id:"p2", title:"YouTube Video Editor Needed", category:"editing", categoryLabel:"VIDEO EDITING", description:"Need an editor for engaging 8–12 minute YouTube videos with B-roll, sound design and storytelling.", budget:5000, timeline:"Per video", owner:"Independent Creator", ownerType:"Creator", skills:["YouTube","B-roll","Sound design"], featured:true, createdAt:2 },
-    { id:"p3", title:"Lifestyle Creator for Product Launch", category:"creator", categoryLabel:"CREATOR CAMPAIGN", description:"Seeking lifestyle creators for a product launch. Share your portfolio, audience profile and proposal.", budget:12000, timeline:"2 weeks", owner:"Studio North", ownerType:"Brand", skills:["Lifestyle","Instagram","UGC"], featured:true, createdAt:3 },
-    { id:"p4", title:"Brand Intro Motion Graphics", category:"design", categoryLabel:"MOTION & DESIGN", description:"Create a polished 15-second brand intro with animated typography and a premium visual finish.", budget:7000, timeline:"1 week", owner:"NOVA Creative", ownerType:"Agency", skills:["Motion Graphics","Typography","After Effects"], featured:true, createdAt:4 }
-  ];
+function setMessage(selector, message, isError = false) {
+  const el = $(selector);
+  if (!el) return;
+  el.textContent = message;
+  el.style.color = isError ? "var(--danger)" : "var(--violet2)";
+}
 
-  let projects = storage.get("projects", initialProjects);
-  let proposals = storage.get("proposals", []);
-  let applications = storage.get("applications", []);
-  let talentFilter = "all";
-  let projectFilter = "all";
-  let activeRole = "client";
+function renderTalent() {
+  const query = ($("#talentSearch").value || "").toLowerCase().trim();
+  const role = $("#talentRole").value;
+  const filtered = sampleTalent.filter(person =>
+    (role === "all" || person.role === role) &&
+    `${person.name} ${person.title} ${person.skills}`.toLowerCase().includes(query)
+  );
 
-  const money = value => "₹" + Number(value || 0).toLocaleString("en-IN");
-
-  function toast(message, isError = false) {
-    const container = $("#toastContainer");
-    if (!container) return;
-    const node = document.createElement("div");
-    node.className = "toast" + (isError ? " error" : "");
-    node.textContent = message;
-    container.appendChild(node);
-    setTimeout(() => node.remove(), 3500);
-  }
-
-  function saveData() {
-    storage.set("projects", projects);
-    storage.set("proposals", proposals);
-    storage.set("applications", applications);
-  }
-
-  function renderTalent() {
-    const grid = $("#talentGrid");
-    if (!grid) return;
-
-    const query = ($("#talentSearch")?.value || "").trim().toLowerCase();
-    const type = $("#talentType")?.value || "all";
-    const specialty = $("#talentSpecialty")?.value || "all";
-
-    const results = talent.filter(person => {
-      const text = [person.name, person.title, person.bio, ...person.specialty].join(" ").toLowerCase();
-      return (type === "all" || person.role === type)
-        && (specialty === "all" || person.specialty.includes(specialty))
-        && (!query || text.includes(query));
-    });
-
-    grid.innerHTML = results.length ? results.map(person => `
-      <article class="talent-card">
-        <div class="talent-top">
-          <div class="talent-avatar ${person.role === "creator" ? "creator" : ""}">${escapeHTML(person.initials)}</div>
-          <div class="talent-info">
-            <h3>${escapeHTML(person.name)} <span class="verified">✦</span></h3>
-            <p>${escapeHTML(person.title)}</p>
-          </div>
-        </div>
-        <p class="talent-bio">${escapeHTML(person.bio)}</p>
-        <div class="tag-list">${person.specialty.map(tag => `<span class="tag">${escapeHTML(tag)}</span>`).join("")}</div>
-        <div class="talent-bottom">
-          <div class="talent-rate">${money(person.rate)}<small>per ${escapeHTML(person.unit)}</small></div>
-          <button class="btn btn-outline" data-action="contactTalent" data-id="${person.id}">View profile ↗</button>
-        </div>
-      </article>
-    `).join("") : `<div class="empty-state"><strong>No matching talent yet</strong>Try a different search or filter.</div>`;
-  }
-
-  function renderProjects() {
-    const grid = $("#projectsGrid");
-    if (!grid) return;
-
-    const query = ($("#projectSearch")?.value || "").trim().toLowerCase();
-    const results = projects.filter(project => {
-      const text = [project.title, project.description, project.owner, ...(project.skills || [])].join(" ").toLowerCase();
-      return (projectFilter === "all" || project.category === projectFilter)
-        && (!query || text.includes(query));
-    });
-
-    grid.innerHTML = results.length ? results.map(project => `
-      <article class="project-card">
-        <div class="project-card-top">
-          <div>
-            <span class="project-category">${escapeHTML(project.categoryLabel || project.category)}</span>
-            <h3>${escapeHTML(project.title)}</h3>
-          </div>
-          <div class="project-budget">${money(project.budget)}<small>budget</small></div>
-        </div>
-        <p class="project-description">${escapeHTML(project.description)}</p>
-        <div class="tag-list">${(project.skills || []).map(skill => `<span class="tag">${escapeHTML(skill)}</span>`).join("")}</div>
-        <div class="project-meta"><span>◷ ${escapeHTML(project.timeline || "Flexible")}</span><span>◈ ${escapeHTML(project.ownerType || "Client")}</span></div>
-        <div class="project-footer">
-          <div class="project-owner">${escapeHTML(project.owner || "Independent client")}<small>Project owner</small></div>
-          <button class="btn btn-primary" data-action="applyProject" data-id="${project.id}">View & apply ↗</button>
-        </div>
-      </article>
-    `).join("") : `<div class="empty-state"><strong>No projects found</strong>Try another search, or be the first to post one.</div>`;
-  }
-
-  function openModal(content) {
-    $("#modalContent").innerHTML = content;
-    $("#modalBackdrop").hidden = false;
-    document.body.style.overflow = "hidden";
-    $("#modalClose").focus();
-  }
-
-  function closeModal() {
-    $("#modalBackdrop").hidden = true;
-    document.body.style.overflow = "";
-  }
-
-  function field(label, name, placeholder, type = "text", required = true) {
-    return `<div class="form-field"><label for="${name}">${escapeHTML(label)}</label><input id="${name}" name="${name}" type="${type}" placeholder="${escapeHTML(placeholder)}" ${required ? "required" : ""}></div>`;
-  }
-
-  function selectField(label, name, options) {
-    return `<div class="form-field"><label for="${name}">${escapeHTML(label)}</label><select id="${name}" name="${name}" required>${options.map(([value, text]) => `<option value="${escapeHTML(value)}">${escapeHTML(text)}</option>`).join("")}</select></div>`;
-  }
-
-  function showSignup() {
-    openModal(`
-      <div class="eyebrow">FIND YOUR PLACE</div>
-      <h2 id="modalTitle">Welcome to <span class="gradient-text">NANCE.</span></h2>
-      <p class="modal-intro">Choose how you'd like to get started. You can explore public listings without registering.</p>
-      <div class="role-grid">
-        <button class="role-option" data-role="client"><span class="role-emoji">🎯</span><strong>Hire talent</strong><small>Post projects and compare proposals.</small></button>
-        <button class="role-option" data-role="editor"><span class="role-emoji">🎬</span><strong>Video editor</strong><small>Find projects and showcase your work.</small></button>
-        <button class="role-option" data-role="creator"><span class="role-emoji">✦</span><strong>Creator</strong><small>Join campaigns and find collaborators.</small></button>
-        <button class="role-option" data-role="brand"><span class="role-emoji">◈</span><strong>Brand / agency</strong><small>Discover talent and manage campaigns.</small></button>
-      </div>
-      <div class="demo-note">Prototype mode: this selection demonstrates the experience. Secure registration and account verification will be added with the backend.</div>
-    `);
-  }
-
-  function showLogin() {
-    openModal(`
-      <div class="eyebrow">YOUR CREATIVE WORKSPACE</div>
-      <h2 id="modalTitle">Welcome back.</h2>
-      <p class="modal-intro">Choose a workspace to preview the NANCE experience.</p>
-      <form id="loginForm">
-        ${selectField("Open workspace", "loginRole", [
-          ["client","Hire talent / Client"],["editor","Video editor"],["creator","Creator"],["brand","Brand / Agency"]
-        ])}
-        <button class="btn btn-primary form-submit" type="submit">Open demo workspace ↗</button>
-      </form>
-      <div class="demo-note">This is a local prototype, not a real sign-in. No password or personal information is needed.</div>
-    `);
-  }
-
-  function showApplication(role) {
-    const labels = {
-      client: ["Hire talent","Tell us what you need and start organising your project."],
-      editor: ["Apply as a video editor","Share your skills and portfolio for review."],
-      creator: ["Apply as a creator","Introduce your content and audience."],
-      brand: ["Register a brand / agency","Tell us about your business and creative needs."]
-    };
-    const [title, description] = labels[role] || labels.client;
-
-    openModal(`
-      <div class="eyebrow">NANCE COMMUNITY</div>
-      <h2 id="modalTitle">${escapeHTML(title)}</h2>
-      <p class="modal-intro">${escapeHTML(description)}</p>
-      <form id="applicationForm" data-role="${escapeHTML(role)}">
-        ${field("Your name","appName","Full name")}
-        ${field("Email address","appEmail","you@example.com","email")}
-        ${field(role === "brand" ? "Business name" : role === "editor" ? "Primary editing skill" : role === "creator" ? "Content niche" : "Project type","appDetail",role === "brand" ? "Business / agency" : role === "editor" ? "e.g. Reels, motion graphics" : role === "creator" ? "e.g. Lifestyle, fitness" : "e.g. Editing, design")}
-        ${field(role === "client" ? "Approximate budget (₹)" : "Portfolio or social link","appLink",role === "client" ? "e.g. 5000" : "https://...",role === "client" ? "number" : "url",false)}
-        <button class="btn btn-primary form-submit" type="submit">Submit demo application ↗</button>
-      </form>
-      <div class="demo-note">Demo only. This form saves an application in this browser. It does not submit to NANCE or create a verified account.</div>
-    `);
-  }
-
-  function showProjectForm() {
-    openModal(`
-      <div class="eyebrow">CREATE AN OPPORTUNITY</div>
-      <h2 id="modalTitle">Post a <span class="gradient-text">project.</span></h2>
-      <p class="modal-intro">Be specific about the work, budget, and timeline to help the right people apply.</p>
-      <form id="projectForm">
-        ${field("Project title","projectTitle","e.g. Edit 10 Instagram reels")}
-        ${selectField("Project category","projectCategory",[
-          ["editing","Video editing"],["creator","Creator campaign"],["design","Motion & design"]
-        ])}
-        <div class="form-field"><label for="projectDescription">Project brief</label><textarea id="projectDescription" name="projectDescription" placeholder="Describe the work, style, deliverables and expectations..." required></textarea></div>
-        ${field("Budget in ₹","projectBudget","e.g. 10000","number")}
-        ${field("Timeline","projectTimeline","e.g. 7 days or monthly")}
-        ${field("Your name or business","projectOwner","e.g. Independent client")}
-        <button class="btn btn-primary form-submit" type="submit">Publish demo project ↗</button>
-      </form>
-      <div class="demo-note">Demo only: your listing will appear in this browser. Other people will not see it until a shared backend is connected.</div>
-    `);
-  }
-
-  function showProject(projectId) {
-    const project = projects.find(item => item.id === projectId);
-    if (!project) return;
-
-    openModal(`
-      <div class="eyebrow">${escapeHTML(project.categoryLabel || project.category)}</div>
-      <h2 id="modalTitle">${escapeHTML(project.title)}</h2>
-      <p class="modal-intro">${escapeHTML(project.description)}</p>
-      <div class="tag-list">${(project.skills || []).map(skill => `<span class="tag">${escapeHTML(skill)}</span>`).join("")}</div>
-      <div class="demo-note">Budget: <strong>${money(project.budget)}</strong> · Timeline: ${escapeHTML(project.timeline || "Flexible")}<br>Posted by ${escapeHTML(project.owner || "Independent client")}.</div>
-      <form id="proposalForm" data-project="${project.id}">
-        <div class="form-field"><label for="proposalName">Your name</label><input id="proposalName" name="proposalName" placeholder="Your name" required></div>
-        <div class="form-field"><label for="proposalRate">Your proposed price (₹)</label><input id="proposalRate" name="proposalRate" type="number" min="1" placeholder="Your quote" required></div>
-        <div class="form-field"><label for="proposalTimeline">Delivery timeline</label><input id="proposalTimeline" name="proposalTimeline" placeholder="e.g. 5 days" required></div>
-        <div class="form-field"><label for="proposalPortfolio">Portfolio link (optional)</label><input id="proposalPortfolio" name="proposalPortfolio" type="url" placeholder="https://..."></div>
-        <div class="form-field"><label for="proposalMessage">Your proposal</label><textarea id="proposalMessage" name="proposalMessage" placeholder="Explain how you'd approach this project..." required></textarea></div>
-        <button class="btn btn-primary form-submit" type="submit">Submit demo proposal ↗</button>
-      </form>
-      <div class="demo-note">This proposal is saved locally for demonstration. No message is sent to the project owner.</div>
-    `);
-  }
-
-  function showTalent(personId) {
-    const person = talent.find(item => item.id === personId);
-    if (!person) return;
-
-    openModal(`
+  $("#talentGrid").innerHTML = filtered.length ? filtered.map(person => `
+    <article class="talent-card">
       <div class="talent-top">
-        <div class="talent-avatar ${person.role === "creator" ? "creator" : ""}">${escapeHTML(person.initials)}</div>
-        <div class="talent-info"><h3 id="modalTitle">${escapeHTML(person.name)} <span class="verified">✦</span></h3><p>${escapeHTML(person.title)}</p></div>
+        <div class="avatar">${safeText(person.name.split(" ").map(n => n[0]).join("").slice(0,2))}</div>
+        <div><h3>${safeText(person.name)}</h3><p>${safeText(person.title)}</p></div>
       </div>
-      <p class="modal-intro">${escapeHTML(person.bio)}</p>
-      <div class="tag-list">${person.specialty.map(tag => `<span class="tag">${escapeHTML(tag)}</span>`).join("")}</div>
-      <div class="demo-note">Illustrative profile · Rate example: <strong>${money(person.rate)} per ${escapeHTML(person.unit)}</strong></div>
-      <button class="btn btn-primary form-submit" id="inviteTalent">Invite to a project ↗</button>
-    `);
+      <p>${safeText(person.bio)}</p>
+      <div class="tag-row"><span class="tag">${safeText(roleNames[person.role])}</span><span class="tag">${safeText(person.skills)}</span></div>
+      <div class="card-bottom-row"><strong>${money(person.rate)}+ / project</strong><button class="btn btn-outline" data-contact="${safeText(person.name)}">View profile</button></div>
+    </article>`).join("") : `<p>No sample profiles match your search.</p>`;
+}
 
-    $("#inviteTalent").addEventListener("click", () => {
-      closeModal();
-      showProjectForm();
-      toast("Create a project brief to begin your invitation.");
+function renderProjects() {
+  const query = ($("#projectSearch").value || "").toLowerCase().trim();
+  const category = $("#projectType").value;
+  const filtered = sampleProjects.filter(project =>
+    (category === "all" || project.category === category) &&
+    `${project.title} ${project.description}`.toLowerCase().includes(query)
+  );
+
+  $("#projectGrid").innerHTML = filtered.length ? filtered.map(project => `
+    <article class="project-card">
+      <div>
+        <span class="tag">${safeText(project.category === "editing" ? "Video editing" : project.category === "creator" ? "Creator campaign" : project.category)}</span>
+        <h3>${safeText(project.title)}</h3>
+        <p>${safeText(project.description)}</p>
+        <p class="small">${safeText(project.timeline)} · Illustrative sample listing</p>
+      </div>
+      <div class="project-meta"><strong>${money(project.budget)}</strong><button class="btn btn-outline" data-project="${safeText(project.id)}">View project</button></div>
+    </article>`).join("") : `<p>No sample projects match your search.</p>`;
+}
+
+function showAuth(mode = "signup") {
+  signupMode = mode === "signup";
+  updateAuthMode();
+  setMessage("#authMessage", "");
+  openDialog("authDialog");
+}
+
+function updateAuthMode() {
+  $("#authTitle").textContent = signupMode ? "Create your account" : "Welcome back";
+  $("#authSubtitle").textContent = signupMode ? "One account. Your creative world." : "Log in to continue to NANCE.";
+  $("#nameWrap").classList.toggle("hidden", !signupMode);
+  $("#roleWrap").classList.toggle("hidden", !signupMode);
+  $("#authName").required = signupMode;
+  $("#authRole").required = signupMode;
+  $("#authPassword").autocomplete = signupMode ? "new-password" : "current-password";
+  $("#authSubmit").textContent = signupMode ? "Create account" : "Log in";
+  $("#tabSignup").classList.toggle("active", signupMode);
+  $("#tabLogin").classList.toggle("active", !signupMode);
+}
+
+async function fetchProfile() {
+  if (!currentUser) return null;
+  const {data, error} = await db
+    .from("profiles")
+    .select("*")
+    .eq("id", currentUser.id)
+    .maybeSingle();
+
+  if (error) throw error;
+  profile = data;
+  return profile;
+}
+
+async function fetchVerifications() {
+  if (!currentUser) return [];
+  const {data, error} = await db
+    .from("role_verifications")
+    .select("id,user_id,role,status,portfolio_url,social_links,applicant_notes,reviewer_notes,submitted_at,reviewed_at")
+    .eq("user_id", currentUser.id);
+
+  if (error) throw error;
+  verificationRecords = data || [];
+  return verificationRecords;
+}
+
+function verificationFor(role) {
+  return verificationRecords.find(item => item.role === role);
+}
+
+function roleIsApproved(role) {
+  if (role === "client") return true;
+  return verificationFor(role)?.status === "approved";
+}
+
+function roleStatus(role) {
+  if (role === "client") return "Client access";
+  const item = verificationFor(role);
+  if (!item) return "Not submitted";
+  return ({
+    pending:"Pending review",
+    needs_changes:"More information requested",
+    approved:"Verified",
+    rejected:"Not approved"
+  })[item.status] || item.status;
+}
+
+function statusClass(role) {
+  const item = verificationFor(role);
+  if (!item) return "";
+  return item.status === "approved" ? "status-approved" :
+    item.status === "rejected" ? "status-rejected" : "status-pending";
+}
+
+function availableRoles() {
+  const roles = ["client"];
+  verificationRoles.forEach(role => {
+    if (verificationFor(role)) roles.push(role);
+  });
+  return [...new Set(roles)];
+}
+
+async function loadWorkspace() {
+  if (!currentUser) return;
+  try {
+    await Promise.all([fetchProfile(), fetchVerifications()]);
+    $("#welcomeTitle").textContent = `Welcome, ${profile?.full_name || currentUser.email?.split("@")[0] || "there"}.`;
+    $("#accountEmail").textContent = currentUser.email || "";
+    $("#activeRole").innerHTML = availableRoles().map(role =>
+      `<option value="${role}">${safeText(roleNames[role])}</option>`
+    ).join("");
+
+    if (!availableRoles().includes(activeRole)) activeRole = "client";
+    $("#activeRole").value = activeRole;
+    $("#activeStatus").textContent = roleStatus(activeRole);
+    $("#activeStatus").className = `status-pill ${statusClass(activeRole)}`;
+    renderWorkspaceContent();
+    $("#loginBtn").classList.add("hidden");
+    $("#signupBtn").classList.add("hidden");
+    $("#heroSignup").classList.add("hidden");
+    $("#bottomSignup").classList.add("hidden");
+    $("#accountBtn").classList.remove("hidden");
+  } catch (error) {
+    console.error(error);
+    toast("Could not load your profile. Check your database policies.");
+  }
+}
+
+function renderWorkspaceContent() {
+  const role = activeRole;
+  const approved = roleIsApproved(role);
+  const item = verificationFor(role);
+  let html = "";
+
+  html += `<div class="workspace-box"><h3>${safeText(roleNames[role])}</h3><p class="${statusClass(role)}">${safeText(roleStatus(role))}</p></div>`;
+
+  if (role !== "client") {
+    if (!item || item.status === "rejected" || item.status === "needs_changes") {
+      html += `<div class="workspace-box"><h3>${item ? "Update your verification" : "Verify this role"}</h3><p>${item?.status === "rejected" ? "Your previous request was not approved. Contact NANCE support before resubmitting." : item?.status === "needs_changes" ? "NANCE needs more information. Review the feedback and update your submission." : "Complete your role profile and submit it for manual review."}</p><button class="btn btn-primary" id="openVerification">${item?.status === "needs_changes" ? "Update submission" : "Apply for verification"}</button></div>`;
+    } else if (item.status === "pending") {
+      html += `<div class="workspace-box"><h3>Verification in progress</h3><p>Your ${safeText(roleNames[role])} role is awaiting review. You can edit your profile while you wait, but you cannot apply to opportunities in this role yet.</p></div>`;
+    } else {
+      html += `<div class="workspace-box"><h3>You're verified</h3><p>This role is approved. You can use eligible role-specific features. Applications will be checked by the database as well as the interface.</p></div>`;
+    }
+  }
+
+  html += `<div class="workspace-box"><h3>Your profile</h3><p>${safeText(profile?.bio || "Add a bio, portfolio link, social links, skills and rate to complete your profile.")}</p><p class="small">Portfolio: ${safeText(profile?.portfolio_url || "Not added")}</p><button class="btn btn-outline" id="completeProfile">Edit ${safeText(roleNames[role].toLowerCase())} profile</button></div>`;
+
+  if (role === "client" || approved) {
+    html += `<div class="workspace-box"><h3>${role === "client" ? "Find creative talent" : "Eligible opportunities"}</h3><p>${role === "client" ? "Post a project and review proposals from talent." : "Your role is approved. The next step is connecting project discovery and proposals to the database."}</p><button class="btn btn-primary" id="openProject">${role === "client" ? "Post a project" : "Explore projects"}</button></div>`;
+  } else {
+    html += `<div class="workspace-box"><h3>Applications are locked</h3><p>You'll be able to apply as ${safeText(roleNames[role].toLowerCase())} once NANCE approves this role. Approval for another role does not unlock this one.</p></div>`;
+  }
+
+  html += `<div class="workspace-box"><h3>Roles under this account</h3><p>${availableRoles().map(r => `${safeText(roleNames[r])}: ${safeText(roleStatus(r))}`).join("<br>")}</p><p class="small">You can add another role without creating another account. Each role has its own verification status.</p><button class="btn btn-outline" id="addRole">Add another role</button></div>`;
+
+  $("#workspaceContent").innerHTML = html;
+
+  $("#openVerification")?.addEventListener("click", openVerificationForm);
+  $("#completeProfile")?.addEventListener("click", openProfileForm);
+  $("#openProject")?.addEventListener("click", () => {
+    if (role === "client") openDialog("projectDialog");
+    else toast("Project discovery and proposals will be connected after the role and profile foundation.");
+  });
+  $("#addRole")?.addEventListener("click", addRole);
+}
+
+function addRole() {
+  const choices = verificationRoles.filter(role => !verificationFor(role));
+  if (!choices.length) {
+    toast("You already have a verification request for each professional role.");
+    return;
+  }
+  const choice = prompt(`Which role do you want to add?\n${choices.map((role,i) => `${i+1}. ${roleNames[role]}`).join("\n")}\nEnter the number.`);
+  const index = Number(choice) - 1;
+  if (!Number.isInteger(index) || index < 0 || index >= choices.length) return;
+  activeRole = choices[index];
+  openVerificationForm();
+}
+
+function openVerificationForm() {
+  const existing = verificationFor(activeRole);
+  $("#verifyTitle").textContent = `Verify ${roleNames[activeRole]}`;
+  $("#verifyPortfolio").value = profile?.portfolio_url || existing?.portfolio_url || "";
+  const links = Array.isArray(existing?.social_links) ? existing.social_links : [];
+  $("#verifyLinks").value = links.join("\n");
+  $("#verifyNotes").value = existing?.applicant_notes || "";
+  setMessage("#verifyMessage", "");
+  openDialog("verifyDialog");
+}
+
+function openProfileForm() {
+  $("#profileName").value = profile?.full_name || "";
+  $("#profileBio").value = profile?.bio || "";
+  $("#profilePortfolio").value = profile?.portfolio_url || "";
+  $("#profileLinks").value = Array.isArray(profile?.social_links) ? profile.social_links.join("\n") : "";
+  $("#profileSkills").value = profile?.skills || "";
+  $("#profileRate").value = profile?.rate ?? "";
+  setMessage("#profileMessage", "");
+  openDialog("profileDialog");
+}
+
+function parseLinks(text) {
+  return text.split(/\n|,/).map(value => value.trim()).filter(Boolean).slice(0,20);
+}
+
+function validHttpUrl(value) {
+  if (!value) return true;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+async function handleAuthSubmit(event) {
+  event.preventDefault();
+  const email = $("#authEmail").value.trim();
+  const password = $("#authPassword").value;
+  const button = $("#authSubmit");
+  button.disabled = true;
+  setMessage("#authMessage", signupMode ? "Creating your account…" : "Logging you in…");
+
+  try {
+    if (signupMode) {
+      const fullName = $("#authName").value.trim();
+      const role = $("#authRole").value;
+
+      const {data, error} = await db.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+          data: {full_name: fullName}
+        }
+      });
+      if (error) throw error;
+
+      if (data.user && data.session) {
+        currentUser = data.user;
+        await createInitialRole(role);
+        await loadWorkspace();
+        closeDialog("authDialog");
+        openDialog("workspaceDialog");
+        toast("Account created. Welcome to NANCE!");
+      } else {
+        setMessage("#authMessage", "Check your email to confirm your account. Then log in here.");
+        $("#authForm").reset();
+        signupMode = false;
+        updateAuthMode();
+      }
+    } else {
+      const {data, error} = await db.auth.signInWithPassword({email,password});
+      if (error) throw error;
+      currentUser = data.user;
+      activeRole = "client";
+      await loadWorkspace();
+      closeDialog("authDialog");
+      openDialog("workspaceDialog");
+      toast("You're logged in.");
+    }
+  } catch (error) {
+    console.error(error);
+    setMessage("#authMessage", error.message || "Authentication failed.", true);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function createInitialRole(role) {
+  if (role === "client") return;
+  const {error} = await db.from("role_verifications").insert({
+    user_id: currentUser.id,
+    role,
+    status:"pending",
+    applicant_notes:"Initial role request. Complete the role profile and verification details."
+  });
+  if (error && error.code !== "23505") throw error;
+}
+
+async function handleProfileSave(event) {
+  event.preventDefault();
+  if (!currentUser) return toast("Please log in first.");
+  const fullName = $("#profileName").value.trim();
+  const bio = $("#profileBio").value.trim();
+  const portfolio = $("#profilePortfolio").value.trim();
+  const links = parseLinks($("#profileLinks").value);
+  const skills = $("#profileSkills").value.trim();
+  const rateValue = $("#profileRate").value;
+  const rate = rateValue === "" ? null : Number(rateValue);
+
+  if (!validHttpUrl(portfolio) || links.some(link => !validHttpUrl(link))) {
+    return setMessage("#profileMessage", "Use complete http:// or https:// URLs.", true);
+  }
+
+  setMessage("#profileMessage", "Saving profile…");
+  try {
+    const {error} = await db.from("profiles").upsert({
+      id:currentUser.id,
+      full_name:fullName,
+      bio,
+      portfolio_url:portfolio || null,
+      social_links:links,
+      skills,
+      rate,
+      updated_at:new Date().toISOString()
+    }, {onConflict:"id"});
+    if (error) throw error;
+    await fetchProfile();
+    setMessage("#profileMessage", "Profile saved.");
+    await loadWorkspace();
+    toast("Profile updated.");
+    setTimeout(() => closeDialog("profileDialog"), 600);
+  } catch (error) {
+    console.error(error);
+    setMessage("#profileMessage", error.message || "Could not save profile.", true);
+  }
+}
+
+async function handleVerificationSubmit(event) {
+  event.preventDefault();
+  if (!currentUser || !verificationRoles.includes(activeRole)) return;
+  const portfolio = $("#verifyPortfolio").value.trim();
+  const links = parseLinks($("#verifyLinks").value);
+  const notes = $("#verifyNotes").value.trim();
+
+  if (!validHttpUrl(portfolio) || links.some(link => !validHttpUrl(link))) {
+    return setMessage("#verifyMessage", "Use complete http:// or https:// URLs.", true);
+  }
+
+  const existing = verificationFor(activeRole);
+  if (existing?.status === "rejected") {
+    return setMessage("#verifyMessage", "This request was rejected. Contact NANCE support before reapplying.", true);
+  }
+
+  setMessage("#verifyMessage", "Submitting for review…");
+  try {
+    const payload = {
+      user_id:currentUser.id,
+      role:activeRole,
+      status:"pending",
+      portfolio_url:portfolio || null,
+      social_links:links,
+      applicant_notes:notes,
+      reviewer_notes:null,
+      reviewed_by:null,
+      reviewed_at:null,
+      submitted_at:new Date().toISOString()
+    };
+
+    let result;
+    if (existing?.status === "needs_changes") {
+      result = await db.from("role_verifications").update({
+        portfolio_url:payload.portfolio_url,
+        social_links:payload.social_links,
+        applicant_notes:payload.applicant_notes,
+        status:"pending",
+        reviewer_notes:null,
+        reviewed_by:null,
+        reviewed_at:null,
+        submitted_at:payload.submitted_at
+      }).eq("id",existing.id).select().single();
+    } else if (existing) {
+      return setMessage("#verifyMessage", "A request for this role already exists.", true);
+    } else {
+      result = await db.from("role_verifications").insert(payload).select().single();
+    }
+    if (result.error) throw result.error;
+    await fetchVerifications();
+    await loadWorkspace();
+    setMessage("#verifyMessage", "Submitted. NANCE will review this role separately.");
+    toast("Verification request submitted.");
+    setTimeout(() => closeDialog("verifyDialog"), 900);
+  } catch (error) {
+    console.error(error);
+    setMessage("#verifyMessage", error.message || "Submission failed. Check your database policies.", true);
+  }
+}
+
+async function handleProjectSubmit(event) {
+  event.preventDefault();
+  if (!currentUser) {
+    closeDialog("projectDialog");
+    showAuth("signup");
+    return;
+  }
+
+  const title = $("#projectTitle").value.trim();
+  const category = $("#projectCategory").value;
+  const description = $("#projectDescription").value.trim();
+  const budget = Number($("#projectBudget").value);
+  const timeline = $("#projectTimeline").value.trim();
+
+  setMessage("#projectMessage", "Publishing…");
+  try {
+    const {error} = await db.from("projects").insert({
+      owner_id:currentUser.id,
+      owner_role:"client",
+      title, category, description,
+      budget,
+      timeline:timeline || null,
+      status:"open"
     });
+    if (error) throw error;
+    setMessage("#projectMessage", "Project published.");
+    $("#projectForm").reset();
+    toast("Project published to NANCE.");
+    setTimeout(() => closeDialog("projectDialog"), 700);
+  } catch (error) {
+    console.error(error);
+    setMessage("#projectMessage", error.message || "Could not publish project.", true);
   }
+}
 
-  function handleRole(role) {
-    activeRole = role;
-    showApplication(role);
+async function logout() {
+  const {error} = await db.auth.signOut();
+  if (error) return toast(error.message);
+  currentUser = null;
+  profile = null;
+  verificationRecords = [];
+  activeRole = "client";
+  $("#accountBtn").classList.add("hidden");
+  $("#loginBtn").classList.remove("hidden");
+  $("#signupBtn").classList.remove("hidden");
+  $("#heroSignup").classList.remove("hidden");
+  $("#bottomSignup").classList.remove("hidden");
+  closeDialog("workspaceDialog");
+  toast("You've logged out.");
+}
+
+async function restoreSession() {
+  try {
+    const {data, error} = await db.auth.getSession();
+    if (error) throw error;
+    currentUser = data.session?.user || null;
+    if (currentUser) await loadWorkspace();
+  } catch (error) {
+    console.error(error);
+    toast("Couldn't restore your session.");
   }
+}
 
-  function handleAction(action, id) {
-    switch (action) {
-      case "signup": showSignup(); break;
-      case "login": showLogin(); break;
-      case "postProject": showProjectForm(); break;
-      case "allTalent":
-        $("#talentSearch").value = "";
-        $("#talentType").value = "all";
-        $("#talentSpecialty").value = "all";
-        renderTalent();
-        $("#discover").scrollIntoView({ behavior:"smooth" });
-        break;
-      case "allProjects":
-        projectFilter = "all";
-        $$(".tab").forEach(tab => tab.classList.toggle("active", tab.dataset.filter === "all"));
-        $("#projectSearch").value = "";
-        renderProjects();
-        $("#projects").scrollIntoView({ behavior:"smooth" });
-        break;
-      case "applyProject": showProject(id); break;
-      case "contactTalent": showTalent(id); break;
-    }
-  }
-
-  document.addEventListener("click", event => {
-    const actionButton = event.target.closest("[data-action]");
-    if (actionButton) {
-      handleAction(actionButton.dataset.action, actionButton.dataset.id);
-      return;
-    }
-
-    const roleButton = event.target.closest("[data-role]");
-    if (roleButton && roleButton.tagName === "BUTTON") {
-      handleRole(roleButton.dataset.role);
-      return;
-    }
-
-    const tab = event.target.closest(".tab");
-    if (tab) {
-      projectFilter = tab.dataset.filter;
-      $$(".tab").forEach(item => item.classList.toggle("active", item === tab));
-      renderProjects();
-    }
+function bindEvents() {
+  $("#loginBtn").addEventListener("click", () => showAuth("login"));
+  $("#signupBtn").addEventListener("click", () => showAuth("signup"));
+  $("#heroSignup").addEventListener("click", () => showAuth("signup"));
+  $("#bottomSignup").addEventListener("click", () => showAuth("signup"));
+  $("#accountBtn").addEventListener("click", async () => {
+    if (currentUser) {
+      await loadWorkspace();
+      openDialog("workspaceDialog");
+    } else showAuth("login");
+  });
+  $("#postProjectBtn").addEventListener("click", () => {
+    if (!currentUser) return showAuth("signup");
+    openDialog("projectDialog");
+  });
+  $("#tabSignup").addEventListener("click", () => {signupMode=true;updateAuthMode();setMessage("#authMessage","");});
+  $("#tabLogin").addEventListener("click", () => {signupMode=false;updateAuthMode();setMessage("#authMessage","");});
+  $("#authForm").addEventListener("submit", handleAuthSubmit);
+  $("#profileForm").addEventListener("submit", handleProfileSave);
+  $("#verifyForm").addEventListener("submit", handleVerificationSubmit);
+  $("#projectForm").addEventListener("submit", handleProjectSubmit);
+  $("#editProfileBtn").addEventListener("click", openProfileForm);
+  $("#logoutBtn").addEventListener("click", logout);
+  $("#activeRole").addEventListener("change", event => {
+    activeRole = event.target.value;
+    $("#activeStatus").textContent = roleStatus(activeRole);
+    $("#activeStatus").className = `status-pill ${statusClass(activeRole)}`;
+    renderWorkspaceContent();
   });
 
   $("#talentSearch").addEventListener("input", renderTalent);
-  $("#talentType").addEventListener("change", renderTalent);
-  $("#talentSpecialty").addEventListener("change", renderTalent);
+  $("#talentRole").addEventListener("change", renderTalent);
   $("#projectSearch").addEventListener("input", renderProjects);
+  $("#projectType").addEventListener("change", renderProjects);
 
-  $("#modalClose").addEventListener("click", closeModal);
-  $("#modalBackdrop").addEventListener("click", event => {
-    if (event.target === $("#modalBackdrop")) closeModal();
-  });
-  document.addEventListener("keydown", event => {
-    if (event.key === "Escape" && !$("#modalBackdrop").hidden) closeModal();
-  });
+  document.addEventListener("click", event => {
+    const close = event.target.closest("[data-close]");
+    if (close) closeDialog(close.dataset.close);
 
-  $("#mobileMenu").addEventListener("click", () => {
-    $("#navLinks").classList.toggle("open");
-  });
+    const contact = event.target.closest("[data-contact]");
+    if (contact) toast(`${contact.dataset.contact} is a sample profile. Live messaging will be added later.`);
 
-  $$("#navLinks a").forEach(link => {
-    link.addEventListener("click", () => $("#navLinks").classList.remove("open"));
-  });
-
-  document.addEventListener("submit", event => {
-    const form = event.target;
-    if (!(form instanceof HTMLFormElement)) return;
-
-    if (form.id === "loginForm") {
-      event.preventDefault();
-      const role = $("#loginRole").value;
-      closeModal();
-      toast("Demo preview opened for: " + role + ". Real login is not connected yet.");
-      handleRole(role);
-    }
-
-    if (form.id === "applicationForm") {
-      event.preventDefault();
-      const data = new FormData(form);
-      const entry = {
-        id: "a" + Date.now(),
-        role: form.dataset.role,
-        name: data.get("appName"),
-        email: data.get("appEmail"),
-        detail: data.get("appDetail"),
-        link: data.get("appLink"),
-        status: "Pending demo review",
-        createdAt: new Date().toISOString()
-      };
-      const saved = storage.get("applications", []);
-      saved.push(entry);
-      storage.set("applications", saved);
-      closeModal();
-      toast("Demo application saved in this browser.");
-    }
-
-    if (form.id === "projectForm") {
-      event.preventDefault();
-      const data = new FormData(form);
-      const category = data.get("projectCategory");
-      const title = String(data.get("projectTitle") || "").trim();
-      const description = String(data.get("projectDescription") || "").trim();
-      const budget = Number(data.get("projectBudget"));
-      const owner = String(data.get("projectOwner") || "").trim();
-
-      if (!title || !description || !owner || !Number.isFinite(budget) || budget <= 0) {
-        toast("Please complete all required fields with a valid budget.", true);
-        return;
-      }
-
-      const labels = { editing:"VIDEO EDITING", creator:"CREATOR CAMPAIGN", design:"MOTION & DESIGN" };
-      const project = {
-        id: "p" + Date.now(),
-        title,
-        category,
-        categoryLabel: labels[category] || category,
-        description,
-        budget,
-        timeline: data.get("projectTimeline") || "Flexible",
-        owner,
-        ownerType: "Client",
-        skills: category === "editing" ? ["Video editing"] : category === "creator" ? ["Creator campaign"] : ["Motion & design"],
-        featured: false,
-        createdAt: Date.now()
-      };
-
-      projects.unshift(project);
-      saveData();
-      renderProjects();
-      closeModal();
-      toast("Your demo project has been published in this browser.");
-      $("#projects").scrollIntoView({ behavior:"smooth" });
-    }
-
-    if (form.id === "proposalForm") {
-      event.preventDefault();
-      const data = new FormData(form);
-      const projectId = form.dataset.project;
-      const project = projects.find(item => item.id === projectId);
-      if (!project) {
-        toast("This project could not be found.", true);
-        return;
-      }
-
-      proposals.push({
-        id: "pr" + Date.now(),
-        projectId,
-        projectTitle: project.title,
-        name: data.get("proposalName"),
-        rate: Number(data.get("proposalRate")),
-        timeline: data.get("proposalTimeline"),
-        portfolio: data.get("proposalPortfolio"),
-        message: data.get("proposalMessage"),
-        status: "Pending demo review",
-        createdAt: new Date().toISOString()
-      });
-
-      saveData();
-      closeModal();
-      toast("Demo proposal saved in this browser. The owner hasn't been notified.");
+    const project = event.target.closest("[data-project]");
+    if (project) {
+      const selected = sampleProjects.find(p => p.id === project.dataset.project);
+      if (selected) toast(`${selected.title} is a sample listing. Sign in to use live project features.`);
     }
   });
 
+  db.auth.onAuthStateChange((_event, session) => {
+    currentUser = session?.user || null;
+    if (!currentUser) {
+      $("#accountBtn").classList.add("hidden");
+      $("#loginBtn").classList.remove("hidden");
+      $("#signupBtn").classList.remove("hidden");
+      $("#heroSignup").classList.remove("hidden");
+      $("#bottomSignup").classList.remove("hidden");
+    }
+  });
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  $("#year").textContent = new Date().getFullYear();
+  bindEvents();
   renderTalent();
   renderProjects();
-})();
+  updateAuthMode();
+  await restoreSession();
+});
