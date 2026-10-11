@@ -1,9 +1,10 @@
+
 "use strict";
 
 /*
- NANCE authentication foundation.
- Supabase publishable keys are intended for browser clients.
- Never add a service-role key or database password here.
+  NANCE authentication and admin verification dashboard.
+  The Supabase publishable key is intended for browser clients.
+  Never add a service-role key or database password here.
 */
 
 const SUPABASE_URL = "https://mslqthzabgzxhbecboin.supabase.co";
@@ -31,6 +32,8 @@ let verificationRecords = [];
 let activeRole = "client";
 let signupMode = true;
 let toastTimer;
+let isNanceAdmin = false;
+let adminVerifications = [];
 
 const sampleTalent = [
   {name:"Arjun Mehta",role:"editor",title:"Motion-led video editor",skills:"After Effects · Reels · Ads",rate:1500,bio:"High-energy edits, expressive typography and clean motion systems."},
@@ -101,7 +104,6 @@ function renderTalent() {
     </article>`).join("") : `<p>No sample profiles match your search.</p>`;
 }
 
-
 async function renderProjects() {
   const query = ($("#projectSearch").value || "").toLowerCase().trim();
   const category = $("#projectType").value;
@@ -121,7 +123,6 @@ async function renderProjects() {
     }
 
     const { data: projects, error } = await request;
-
     if (error) throw error;
 
     const filtered = (projects || []).filter((project) =>
@@ -152,7 +153,6 @@ async function renderProjects() {
           </article>
         `).join("")
       : "<p>No open projects found. Try another search.</p>";
-
   } catch (error) {
     console.error("Could not load projects:", error);
     grid.innerHTML = "<p>Projects couldn't load. Please refresh and try again.</p>";
@@ -240,10 +240,154 @@ function availableRoles() {
   return [...new Set(roles)];
 }
 
+/* Admin-only review functions. Supabase RLS must enforce these permissions too. */
+async function checkNanceAdmin() {
+  isNanceAdmin = false;
+  if (!currentUser) return false;
+
+  const {data, error} = await db.rpc("is_nance_admin");
+  if (error) {
+    console.warn("Admin status check failed:", error.message);
+    return false;
+  }
+
+  isNanceAdmin = data === true;
+  return isNanceAdmin;
+}
+
+async function fetchAdminVerifications() {
+  if (!currentUser || !isNanceAdmin) return [];
+
+  const {data, error} = await db
+    .from("role_verifications")
+    .select("id,user_id,role,status,portfolio_url,social_links,applicant_notes,reviewer_notes,submitted_at,reviewed_at")
+    .order("submitted_at", {ascending:false});
+
+  if (error) throw error;
+  adminVerifications = data || [];
+  return adminVerifications;
+}
+
+function renderAdminPanel() {
+  if (!isNanceAdmin) return "";
+
+  return `
+    <section class="workspace-box admin-panel" aria-labelledby="adminHeading">
+      <div class="admin-heading-row">
+        <div><span class="eyebrow">NANCE CONTROL ROOM</span><h3 id="adminHeading">Verification approvals</h3></div>
+        <button class="btn btn-outline" id="refreshAdminQueue" type="button">Refresh queue</button>
+      </div>
+      <p class="small muted">Admin access is verified by Supabase. Decisions are saved to the verification record.</p>
+      <div id="adminQueue" aria-live="polite"><p>Loading verification requests…</p></div>
+      <p class="form-note" id="adminMessage" role="status"></p>
+    </section>`;
+}
+
+async function loadAdminQueue() {
+  const queue = $("#adminQueue");
+  const message = $("#adminMessage");
+  if (!isNanceAdmin || !queue) return;
+
+  queue.innerHTML = "<p>Loading verification requests…</p>";
+  if (message) message.textContent = "";
+
+  try {
+    const rows = await fetchAdminVerifications();
+    if (!rows.length) {
+      queue.innerHTML = "<p>No verification requests yet. New applications will appear here.</p>";
+      return;
+    }
+
+    queue.innerHTML = rows.map(item => `
+      <article class="admin-request">
+        <div class="admin-request-top">
+          <div>
+            <span class="tag">${safeText(roleNames[item.role] || item.role)}</span>
+            <h4>${safeText(item.status || "unknown status")}</h4>
+          </div>
+          <span class="small muted">Submitted: ${safeText(item.submitted_at ? new Date(item.submitted_at).toLocaleString() : "Unknown")}</span>
+        </div>
+        <p><strong>Applicant user ID:</strong><br><code>${safeText(item.user_id)}</code></p>
+        <p><strong>Portfolio:</strong> ${item.portfolio_url ? `<a href="${safeText(item.portfolio_url)}" target="_blank" rel="noopener noreferrer">${safeText(item.portfolio_url)}</a>` : "Not provided"}</p>
+        <p><strong>Social links / evidence:</strong></p>
+        ${Array.isArray(item.social_links) && item.social_links.length ? `<ul>${item.social_links.map(link => `<li><a href="${safeText(link)}" target="_blank" rel="noopener noreferrer">${safeText(link)}</a></li>`).join("")}</ul>` : "<p>None provided.</p>"}
+        <p><strong>Applicant notes:</strong><br>${safeText(item.applicant_notes || "None provided.")}</p>
+        ${item.reviewer_notes ? `<p><strong>Previous reviewer notes:</strong><br>${safeText(item.reviewer_notes)}</p>` : ""}
+        ${item.status === "pending" || item.status === "needs_changes" ? `
+          <div class="admin-actions">
+            <button class="btn btn-primary" type="button" data-review-id="${safeText(item.id)}" data-review-status="approved">Approve</button>
+            <button class="btn btn-outline" type="button" data-review-id="${safeText(item.id)}" data-review-status="needs_changes">Request changes</button>
+            <button class="btn btn-ghost admin-reject" type="button" data-review-id="${safeText(item.id)}" data-review-status="rejected">Reject</button>
+          </div>` : `
+          <p class="small">Reviewed: ${safeText(item.reviewed_at ? new Date(item.reviewed_at).toLocaleString() : "Not recorded")}</p>`}
+      </article>
+    `).join("");
+  } catch (error) {
+    console.error("Could not load admin verification queue:", error);
+    queue.innerHTML = "<p>Could not load applications. Check the admin review RLS policy and browser console.</p>";
+    if (message) message.textContent = error.message || "Could not load verification requests.";
+  }
+}
+
+async function reviewVerification(id, status) {
+  if (!currentUser || !isNanceAdmin) {
+    toast("Admin access is required for this action.");
+    return;
+  }
+
+  if (!["approved", "rejected", "needs_changes"].includes(status)) return;
+
+  let reviewerNotes = "";
+  if (status === "rejected" || status === "needs_changes") {
+    reviewerNotes = prompt(
+      status === "rejected"
+        ? "Reason for rejection (required):"
+        : "What should the applicant change? (required)"
+    )?.trim() || "";
+
+    if (!reviewerNotes) {
+      toast("Please enter a note for the applicant.");
+      return;
+    }
+  } else {
+    reviewerNotes = prompt("Optional note for the applicant:")?.trim() || "";
+  }
+
+  const message = $("#adminMessage");
+  if (message) message.textContent = "Saving review decision…";
+
+  try {
+    const {error} = await db
+      .from("role_verifications")
+      .update({
+        status,
+        reviewer_notes: reviewerNotes || null,
+        reviewed_by: currentUser.id,
+        reviewed_at: new Date().toISOString()
+      })
+      .eq("id", id);
+
+    if (error) throw error;
+
+    if (message) message.textContent = "Decision saved.";
+    toast("Verification decision saved.");
+    await loadAdminQueue();
+    await fetchVerifications();
+    renderWorkspaceContent();
+  } catch (error) {
+    console.error("Could not save verification decision:", error);
+    if (message) message.textContent = error.message || "Could not save this decision. Check the admin review RLS policy.";
+    toast("The decision could not be saved.");
+  }
+}
+
 async function loadWorkspace() {
   if (!currentUser) return;
+
   try {
     await Promise.all([fetchProfile(), fetchVerifications()]);
+    await checkNanceAdmin();
+
     $("#welcomeTitle").textContent = `Welcome, ${profile?.full_name || currentUser.email?.split("@")[0] || "there"}.`;
     $("#accountEmail").textContent = currentUser.email || "";
     $("#activeRole").innerHTML = availableRoles().map(role =>
@@ -255,6 +399,7 @@ async function loadWorkspace() {
     $("#activeStatus").textContent = roleStatus(activeRole);
     $("#activeStatus").className = `status-pill ${statusClass(activeRole)}`;
     renderWorkspaceContent();
+
     $("#loginBtn").classList.add("hidden");
     $("#signupBtn").classList.add("hidden");
     $("#heroSignup").classList.add("hidden");
@@ -294,6 +439,8 @@ function renderWorkspaceContent() {
 
   html += `<div class="workspace-box"><h3>Roles under this account</h3><p>${availableRoles().map(r => `${safeText(roleNames[r])}: ${safeText(roleStatus(r))}`).join("<br>")}</p><p class="small">You can add another role without creating another account. Each role has its own verification status.</p><button class="btn btn-outline" id="addRole">Add another role</button></div>`;
 
+  if (isNanceAdmin) html += renderAdminPanel();
+
   $("#workspaceContent").innerHTML = html;
 
   $("#openVerification")?.addEventListener("click", openVerificationForm);
@@ -303,6 +450,16 @@ function renderWorkspaceContent() {
     else toast("Project discovery and proposals will be connected after the role and profile foundation.");
   });
   $("#addRole")?.addEventListener("click", addRole);
+  $("#refreshAdminQueue")?.addEventListener("click", loadAdminQueue);
+
+  if (isNanceAdmin) {
+    $("#workspaceContent").querySelectorAll("[data-review-id]").forEach(button => {
+      button.addEventListener("click", () => {
+        reviewVerification(button.dataset.reviewId, button.dataset.reviewStatus);
+      });
+    });
+    loadAdminQueue();
+  }
 }
 
 function addRole() {
@@ -559,6 +716,8 @@ async function logout() {
   currentUser = null;
   profile = null;
   verificationRecords = [];
+  adminVerifications = [];
+  isNanceAdmin = false;
   activeRole = "client";
   $("#accountBtn").classList.add("hidden");
   $("#loginBtn").classList.remove("hidden");
@@ -628,11 +787,18 @@ function bindEvents() {
       const selected = sampleProjects.find(p => p.id === project.dataset.project);
       if (selected) toast(`${selected.title} is a sample listing. Sign in to use live project features.`);
     }
+
+    const reviewButton = event.target.closest("[data-review-id]");
+    if (reviewButton) {
+      reviewVerification(reviewButton.dataset.reviewId, reviewButton.dataset.reviewStatus);
+    }
   });
 
   db.auth.onAuthStateChange((_event, session) => {
     currentUser = session?.user || null;
     if (!currentUser) {
+      isNanceAdmin = false;
+      adminVerifications = [];
       $("#accountBtn").classList.add("hidden");
       $("#loginBtn").classList.remove("hidden");
       $("#signupBtn").classList.remove("hidden");
