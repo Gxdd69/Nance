@@ -453,14 +453,8 @@ function renderWorkspaceContent() {
   $("#refreshAdminQueue")?.addEventListener("click", loadAdminQueue);
 
   if (isNanceAdmin) {
-    $("#workspaceContent").querySelectorAll("[data-review-id]").forEach(button => {
-      button.addEventListener("click", () => {
-        reviewVerification(button.dataset.reviewId, button.dataset.reviewStatus);
-      });
-    });
     loadAdminQueue();
   }
-}
 
 function addRole() {
   const choices = verificationRoles.filter(role => !verificationFor(role));
