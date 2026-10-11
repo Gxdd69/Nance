@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b0812">
+  <meta name="description" content="NANCE connects brands, creators, video editors, and clients to make creative work happen.">
+  <title>NANCE | Creative Work, Connected</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+
+  <header class="navbar">
+    <a class="brand-logo" href="#home" aria-label="NANCE home">
+      <span class="logo-symbol">N</span>
+      <span>NANCE<span class="logo-dot">.</span></span>
+    </a>
+
+    <button class="mobile-menu" id="mobileMenu" aria-label="Toggle navigation">☰</button>
+
+    <nav class="nav-links" id="navLinks">
+      <a href="#discover">Discover talent</a>
+      <a href="#projects">Find projects</a>
+      <a href="#how">How it works</a>
+    </nav>
+
+    <div class="nav-actions">
+      <button class="btn btn-ghost" data-action="login">Log in</button>
+      <button class="btn btn-primary" data-action="signup">Get started <span>↗</span></button>
+    </div>
+  </header>
+
+  <main id="home">
+    <section class="hero section-wrap">
+      <div class="hero-copy">
+        <div class="eyebrow"><span class="live-dot"></span> YOUR NEXT CREATIVE COLLAB STARTS HERE</div>
+        <h1>Good ideas deserve <span class="gradient-text">great people.</span></h1>
+        <p class="hero-description">
+          One place for brands, creators, video editors, and ambitious people
+          to find each other and turn ideas into finished work.
+        </p>
+        <div class="hero-actions">
+          <button class="btn btn-primary btn-large" data-action="signup">Start creating <span>↗</span></button>
+          <a class="btn btn-outline btn-large" href="#discover">Explore talent <span>→</span></a>
+        </div>
+        <div class="hero-proof">
+          <div class="avatar-stack">
+            <span>V</span><span>E</span><span>C</span><span>+</span>
+          </div>
+          <p><strong>One creative ecosystem.</strong><br>Built for work that moves forward.</p>
+        </div>
+      </div>
+
+      <div class="hero-art">
+        <div class="orbit orbit-one"></div>
+        <div class="orbit orbit-two"></div>
+        <div class="hero-core">
+          <div class="core-inner">N<span>.</span></div>
+          <span class="core-label">CREATE TOGETHER</span>
+        </div>
+        <div class="float-card float-card-top">
+          <div class="mini-icon violet-icon">✳</div>
+          <div><strong>Creator campaigns</strong><small>Ideas meet audiences</small></div>
+          <span class="status-pill">Explore</span>
+        </div>
+        <div class="float-card float-card-bottom">
+          <div class="mini-icon pink-icon">▶</div>
+          <div><strong>Video editing</strong><small>Brief → Edit → Deliver</small></div>
+          <span class="card-arrow">↗</span>
+        </div>
+        <div class="spark spark-one">✦</div>
+        <div class="spark spark-two">✧</div>
+        <div class="hero-caption">THE SPACE BETWEEN<br>IDEA & EXECUTION</div>
+      </div>
+    </section>
+
+    <section class="trust-strip section-wrap">
+      <span>MADE FOR THE PEOPLE WHO MAKE THINGS</span>
+      <div class="trust-items"><span>BRANDS</span><span>CREATORS</span><span>EDITORS</span><span>CLIENTS</span></div>
+    </section>
+
+    <section class="section-wrap section-block" id="discover">
+      <div class="section-heading">
+        <div>
+          <div class="eyebrow">THE RIGHT PEOPLE CHANGE EVERYTHING</div>
+          <h2>Discover your next <span class="gradient-text">creative partner.</span></h2>
+          <p>Explore the talent behind the next great project.</p>
+        </div>
+        <button class="btn btn-outline" data-action="allTalent">Explore all talent ↗</button>
+      </div>
+
+      <div class="filter-bar">
+        <div class="search-box"><span>⌕</span><input id="talentSearch" type="search" placeholder="Search names, skills, niches..."></div>
+        <select id="talentType" aria-label="Filter talent type">
+          <option value="all">All talent</option>
+          <option value="editor">Video editors</option>
+          <option value="creator">Creators</option>
+        </select>
+        <select id="talentSpecialty" aria-label="Filter specialty">
+          <option value="all">All specialties</option>
+          <option value="Motion Graphics">Motion graphics</option>
+          <option value="Reels">Short-form reels</option>
+          <option value="Fitness">Fitness</option>
+          <option value="Lifestyle">Lifestyle</option>
+          <option value="Brand Films">Brand films</option>
+        </select>
+      </div>
+
+      <div class="talent-grid" id="talentGrid"></div>
+      <div class="center-action"><button class="btn btn-outline" data-action="allTalent">Discover more talent →</button></div>
+    </section>
+
+    <section class="project-section" id="projects">
+      <div class="section-wrap section-block">
+        <div class="section-heading">
+          <div>
+            <div class="eyebrow">YOUR NEXT OPPORTUNITY IS OUT THERE</div>
+            <h2>Find projects. <span class="gradient-text">Make your mark.</span></h2>
+            <p>Open opportunities from people looking for creative talent.</p>
+          </div>
+          <button class="btn btn-primary" data-action="postProject">+ Post a project</button>
+        </div>
+
+        <div class="project-toolbar">
+          <div class="project-tabs" id="projectTabs">
+            <button class="tab active" data-filter="all">All projects</button>
+            <button class="tab" data-filter="editing">Video editing</button>
+            <button class="tab" data-filter="creator">Creator campaigns</button>
+            <button class="tab" data-filter="design">Design</button>
+          </div>
+          <div class="search-box project-search"><span>⌕</span><input id="projectSearch" type="search" placeholder="Search projects..."></div>
+        </div>
+
+        <div class="projects-grid" id="projectsGrid"></div>
+        <div class="center-action"><button class="btn btn-outline" data-action="allProjects">View all opportunities →</button></div>
+      </div>
+    </section>
+
+    <section class="section-wrap section-block" id="how">
+      <div class="center-heading">
+        <div class="eyebrow">SIMPLE BY DESIGN</div>
+        <h2>From first message to <span class="gradient-text">final delivery.</span></h2>
+        <p>Less chasing. Clearer expectations. Better collaborations.</p>
+      </div>
+
+      <div class="steps-grid">
+        <article class="step-card">
+          <span class="step-number">01</span>
+          <div class="step-icon">⌕</div>
+          <h3>Find your people</h3>
+          <p>Discover editors and creators, or publish a project with the details talent needs.</p>
+        </article>
+        <article class="step-card featured-step">
+          <span class="step-number">02</span>
+          <div class="step-icon">✳</div>
+          <h3>Agree on the plan</h3>
+          <p>Review proposals, compare budgets and timelines, and choose the right fit.</p>
+        </article>
+        <article class="step-card">
+          <span class="step-number">03</span>
+          <div class="step-icon">↗</div>
+          <h3>Make it happen</h3>
+          <p>Keep deliverables, feedback, revisions, and project progress organised.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="cta-section section-wrap">
+      <div class="cta-content">
+        <div class="eyebrow">YOUR NEXT CHAPTER STARTS HERE</div>
+        <h2>Bring the idea.<br><span class="gradient-text">We'll help connect the dots.</span></h2>
+        <p>Whether you're hiring, creating, or building your portfolio, there's a place for you at NANCE.</p>
+        <button class="btn btn-primary btn-large" data-action="signup">Find your place at NANCE ↗</button>
+      </div>
+      <div class="cta-decoration"><span>N</span><i>✦</i><b>+</b></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="section-wrap footer-inner">
+      <a class="brand-logo" href="#home"><span class="logo-symbol">N</span><span>NANCE<span class="logo-dot">.</span></span></a>
+      <p>Creative work, connected.</p>
+      <div class="footer-links"><a href="#discover">Talent</a><a href="#projects">Projects</a><a href="#how">How it works</a></div>
+      <span class="footer-copy">© 2026 NANCE. Demo experience.</span>
+    </div>
+  </footer>
+
+  <div class="modal-backdrop" id="modalBackdrop" hidden>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <button class="modal-close" id="modalClose" aria-label="Close dialog">×</button>
+      <div id="modalContent"></div>
+    </section>
+  </div>
+
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <script src="script.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
